@@ -4,29 +4,61 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/gkwa/nearwait/core"
 	"github.com/gkwa/nearwait/internal/logger"
 )
 
 var (
-	cfgFile   string
-	verbose   bool
-	logFormat string
-	cliLogger logr.Logger
+	cfgFile      string
+	verbose      bool
+	logFormat    string
+	cliLogger    logr.Logger
+	force        bool
+	debug        bool
+	manifestFile string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "nearwait",
-	Short: "A brief description of your application",
-	Long:  `A longer description that spans multiple lines and likely contains examples and usage of using your application.`,
+	Short: "Nearwait copies project files to clipboard based on a manifest",
+	Long:  `Nearwait is a tool that copies project files to the clipboard according to what's specified in a local manifest YAML file.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logger := LoggerFrom(cmd.Context())
+
+		generator := core.NewManifestGenerator(logger)
+		isNewManifest, err := generator.Generate(force, manifestFile)
+		if err != nil {
+			logger.Error(err, "Failed to generate manifest")
+			return err
+		}
+
+		if isNewManifest {
+			absPath, _ := filepath.Abs(manifestFile)
+			fmt.Printf("%s generated successfully\n", absPath)
+			return nil
+		}
+
+		processor := core.NewManifestProcessor(logger, debug, manifestFile)
+		isEmpty, err := processor.Process()
+		if err != nil {
+			logger.Error(err, "Failed to process manifest")
+			return err
+		}
+
+		if isEmpty {
+			absPath, _ := filepath.Abs(manifestFile)
+			fmt.Fprintf(os.Stderr, "Manifest file list is empty from %s\n", absPath)
+		}
+
+		return nil
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Initialize the console logger just before running
-		// a command only if one wasn't provided. This allows other
-		// callers (e.g. unit tests) to inject their own logger ahead of time.
 		if cliLogger.IsZero() {
 			cliLogger = logger.NewConsoleLogger(verbose, logFormat == "json")
 		}
@@ -49,6 +81,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.nearwait.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose mode")
 	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "", "json or text (default is text)")
+	rootCmd.PersistentFlags().BoolVar(&force, "force", false, "Force overwrite of existing manifest")
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Keep temporary directory for debugging")
+	rootCmd.PersistentFlags().StringVar(&manifestFile, "manifest", ".nearwait.yml", "Name of the manifest file")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
 		fmt.Printf("Error binding verbose flag: %v\n", err)

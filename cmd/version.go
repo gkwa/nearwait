@@ -3,8 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/gkwa/nearwait/version"
 	"github.com/spf13/cobra"
+
+	"github.com/gkwa/nearwait/version"
 )
 
 var versionCmd = &cobra.Command{

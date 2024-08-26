@@ -1,66 +1,78 @@
 # Nearwait
 
-This is Nearwait, a tool for managing your project files.
+Nearwait copies project files to the clipboard according to what's specified in a local manifest YAML file.
 
-## What does it do?
+## Motivation
 
-Creates txtar with all files you enabled in .manifest.yml
+Working with GPT to iterate on editing project files.
 
-So, first create manifest in your new project:
+## Workflow
 
-```bash
-cd myproject
-nearwait manifest
+1. Recursively scans the current directory for files
+1. Generates a manifest file (default: `.nearwait.yml`) with all files initially commented out
+1. Allows user to manually edit the manifest to enable specific files
+1. Generates a txtar archive (default `.nearwait.txtar`) based on the enabled files in the manifest
+1. Automatically copies the txtar content to the clipboard when enabled files are present
+
+## Usage
+
+1. Run Nearwait in your project directory:
+   ```
+   nearwait
+   ```
+   This generates the initial `.nearwait.yml` manifest with all files commented out.
+
+1. Edit the `.nearwait.yml` file to uncomment (enable) the files you want to include:
+   ```yaml
+   filelist:
+   # - /path/to/excluded/file.txt
+   - /path/to/included/file.txt
+   ```
+
+1. Run Nearwait again to process the manifest and generate the txtar archive:
+   ```
+   nearwait
+   ```
+
+1. If there are enabled files in the manifest, the txtar content will be automatically copied to your clipboard.
+
+## Options
+
+- `--force`: Force overwrite of existing manifest
+- `--debug`: Keep temporary directory for debugging
+- `--manifest <filename>`: Specify a custom name for the manifest file (default: `.nearwait.yml`)
+- `--verbose`, `-v`: Enable verbose mode
+- `--log-format`: Set log format to 'json' or 'text' (default is text)
+- `--config`: Specify a config file (default is $HOME/.nearwait.yaml)
+
+## Notes
+
+- The tool ignores certain directories by default (e.g., `.git`, `node_modules`, etc.)
+- The txtar archive is named based on the manifest filename (e.g., `.nearwait.txtar` for the default manifest)
+
+## Installation
+
+To install Nearwait, ensure you have Go installed on your system, then run:
+
+```
+go install github.com/gkwa/nearwait@latest
 ```
 
-Now we have .manifest.yml.  Comment out the files you don't want listed in txtar file.
+## Building from Source
 
-Run nearwait again to generate txtar
+To build Nearwait from source:
 
-
-## Quick Start
-
-Here's how to get started with Nearwait:
-
-```bash
-# Generate a manifest
-./nearwait manifest
-
-# Force overwrite an existing manifest
-./nearwait manifest --force
-
-# Use a custom manifest file name
-./nearwait manifest --manifest my_manifest.yml
-
-# Run in debug mode (keeps temp files)
-./nearwait manifest --debug
-
-# Combine flags
-./nearwait manifest --force --debug --manifest custom_manifest.yml
-```
-
-## Cheat Sheet
-
-| Command | Description |
-|---------|-------------|
-| `./nearwait manifest` | Generate a manifest file |
-| `./nearwait manifest --force` | Overwrite existing manifest |
-| `./nearwait manifest --manifest FILE` | Use custom manifest file name |
-| `./nearwait manifest --debug` | Run in debug mode |
-
-## Examples
-
-1. Basic usage:
+1. Clone the repository:
    ```
-   ./nearwait manifest
+   git clone https://github.com/gkwa/nearwait.git
    ```
 
-2. Force regenerate manifest:
+1. Navigate to the project directory:
    ```
-   ./nearwait manifest --force
+   cd nearwait
    ```
 
-3. Use a custom manifest name and debug:
+1. Build the project:
    ```
-   ./nearwait manifest --manifest project_files.yml --debug
+   go build
    ```

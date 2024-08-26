@@ -1,62 +1,170 @@
 package core
 
 import (
+	"bufio"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/go-logr/logr"
 )
 
 type Manifest struct {
-	FileList []string `yaml:"filelist"`
+	FileList map[string]bool
+}
+
+type ManifestReader interface {
+	ReadManifest(manifestFile string) (Manifest, error)
+}
+
+type ManifestWriter interface {
+	WriteManifest(manifest Manifest, manifestFile string) error
+}
+
+type ManifestUpdater interface {
+	UpdateManifest(manifest Manifest, currentFiles map[string]bool) Manifest
+}
+
+type FileSystemWalker interface {
+	GetCurrentFiles() (map[string]bool, error)
 }
 
 type ManifestGenerator struct {
 	logger      logr.Logger
 	excludeDirs map[string]bool
+	reader      ManifestReader
+	writer      ManifestWriter
+	updater     ManifestUpdater
+	walker      FileSystemWalker
 }
 
 func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
-	return &ManifestGenerator{
+	mg := &ManifestGenerator{
 		logger: logger,
 		excludeDirs: map[string]bool{
-			"__pycache__":             true,
-			".git":                    true,
-			".tox":                    true,
-			".ruff_cache":             true,
-			".pytest_cache":           true,
-			".terraform":              true,
-			".timestamps":             true,
-			".venv":                   true,
-			"gpt_instructions_XXYYBB": true,
-			"node_modules":            true,
-			"target/debug":            true,
+			"__pycache__":   true,
+			".git":          true,
+			".nearwait.yml": true,
+			".pytest_cache": true,
+			".ruff_cache":   true,
+			".terraform":    true,
+			".timestamps":   true,
+			".tox":          true,
+			".venv":         true,
+			"node_modules":  true,
+			"target/debug":  true,
 		},
 	}
+	mg.reader = mg
+	mg.writer = mg
+	mg.updater = mg
+	mg.walker = mg
+	return mg
 }
 
-func (mg *ManifestGenerator) Generate(force bool, manifestFile string) error {
+func (mg *ManifestGenerator) Generate(force bool, manifestFile string) (bool, error) {
 	mg.logger.V(1).Info("Generating manifest")
 
-	manifest := Manifest{}
-	err := mg.walkDirectory(&manifest)
+	currentFiles, err := mg.walker.GetCurrentFiles()
 	if err != nil {
-		return fmt.Errorf("error walking directory: %w", err)
+		return false, fmt.Errorf("error getting current files: %w", err)
 	}
 
-	if err := mg.writeManifest(manifest, force, manifestFile); err != nil {
+	manifest, err := mg.reader.ReadManifest(manifestFile)
+	if err != nil {
+		return false, fmt.Errorf("error reading manifest: %w", err)
+	}
+
+	isNewManifest := len(manifest.FileList) == 0
+	updatedManifest := mg.updater.UpdateManifest(manifest, currentFiles)
+
+	if err := mg.writer.WriteManifest(updatedManifest, manifestFile); err != nil {
+		return false, fmt.Errorf("error writing manifest: %w", err)
+	}
+
+	return isNewManifest, nil
+}
+
+func (mg *ManifestGenerator) ReadManifest(manifestFile string) (Manifest, error) {
+	manifest := Manifest{FileList: make(map[string]bool)}
+
+	if _, err := os.Stat(manifestFile); os.IsNotExist(err) {
+		return manifest, nil
+	}
+
+	file, err := os.Open(manifestFile)
+	if err != nil {
+		return manifest, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "# - ") {
+			manifest.FileList[strings.TrimPrefix(line, "# - ")] = true
+		} else if strings.HasPrefix(line, "- ") {
+			manifest.FileList[strings.TrimPrefix(line, "- ")] = false
+		}
+	}
+
+	return manifest, scanner.Err()
+}
+
+func (mg *ManifestGenerator) WriteManifest(manifest Manifest, manifestFile string) error {
+	file, err := os.Create(manifestFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	_, err = writer.WriteString("filelist:\n")
+	if err != nil {
 		return err
 	}
 
-	mg.logger.Info("Manifest generated successfully")
-	return nil
+	var sortedFiles []string
+	for file := range manifest.FileList {
+		sortedFiles = append(sortedFiles, file)
+	}
+	sort.Strings(sortedFiles)
+
+	for _, file := range sortedFiles {
+		isCommented := manifest.FileList[file]
+		prefix := "- "
+		if isCommented {
+			prefix = "# - "
+		}
+		_, err = writer.WriteString(fmt.Sprintf("%s%s\n", prefix, file))
+		if err != nil {
+			return err
+		}
+	}
+
+	return writer.Flush()
 }
 
-func (mg *ManifestGenerator) walkDirectory(manifest *Manifest) error {
-	return filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+func (mg *ManifestGenerator) UpdateManifest(manifest Manifest, currentFiles map[string]bool) Manifest {
+	updatedManifest := Manifest{FileList: make(map[string]bool)}
+
+	for file := range currentFiles {
+		if isCommented, exists := manifest.FileList[file]; exists {
+			updatedManifest.FileList[file] = isCommented
+		} else {
+			updatedManifest.FileList[file] = true
+		}
+	}
+
+	return updatedManifest
+}
+
+func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
+	files := make(map[string]bool)
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -75,28 +183,54 @@ func (mg *ManifestGenerator) walkDirectory(manifest *Manifest) error {
 			if err != nil {
 				return err
 			}
-			manifest.FileList = append(manifest.FileList, absPath)
+			files[absPath] = true
 		}
 
 		return nil
 	})
+	return files, err
 }
 
-func (mg *ManifestGenerator) writeManifest(manifest Manifest, force bool, manifestFile string) error {
-	if _, err := os.Stat(manifestFile); err == nil && !force {
-		mg.logger.Info("Manifest file already exists and --force flag not set")
-		return nil
-	}
-
-	yamlData := "filelist:\n"
-	for _, file := range manifest.FileList {
-		yamlData += fmt.Sprintf("#    - %s\n", file)
-	}
-
-	err := os.WriteFile(manifestFile, []byte(yamlData), 0o644)
+func (mg *ManifestGenerator) CommentItem(manifestFile, item string) error {
+	manifest, err := mg.ReadManifest(manifestFile)
 	if err != nil {
-		return fmt.Errorf("error writing manifest: %w", err)
+		return err
 	}
 
-	return nil
+	if _, exists := manifest.FileList[item]; exists {
+		manifest.FileList[item] = true
+		return mg.WriteManifest(manifest, manifestFile)
+	}
+
+	return fmt.Errorf("item not found in manifest")
+}
+
+func (mg *ManifestGenerator) UncommentItem(manifestFile, item string) error {
+	manifest, err := mg.ReadManifest(manifestFile)
+	if err != nil {
+		return err
+	}
+
+	if _, exists := manifest.FileList[item]; exists {
+		manifest.FileList[item] = false
+		return mg.WriteManifest(manifest, manifestFile)
+	}
+
+	return fmt.Errorf("item not found in manifest")
+}
+
+func (mg *ManifestGenerator) GetItemStatus(manifestFile, item string) (string, error) {
+	manifest, err := mg.ReadManifest(manifestFile)
+	if err != nil {
+		return "", err
+	}
+
+	if isCommented, exists := manifest.FileList[item]; exists {
+		if isCommented {
+			return "disabled", nil
+		}
+		return "enabled", nil
+	}
+
+	return "not in list", nil
 }

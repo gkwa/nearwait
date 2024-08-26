@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type ProjectInfo struct {
@@ -29,13 +30,17 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 
 	mp.logger.V(1).Info("Created temporary directory", "path", tempDir)
 
+	manifestBasename := filepath.Base(mp.manifestFile)
+	manifestBasename = strings.TrimSuffix(manifestBasename, filepath.Ext(manifestBasename))
+	txtarFilename := fmt.Sprintf("%s.txtar", manifestBasename)
+
 	info := ProjectInfo{
 		Name:       projectName,
 		CWD:        cwd,
 		TempDir:    tempDir,
 		TarFile:    filepath.Join(tempDir, fmt.Sprintf("%s.tar", projectName)),
 		ExtractDir: filepath.Join(tempDir, projectName),
-		TxtarFile:  fmt.Sprintf("%s.txtar", projectName),
+		TxtarFile:  txtarFilename,
 	}
 
 	return info, nil

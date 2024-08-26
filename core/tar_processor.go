@@ -5,8 +5,15 @@ import (
 	"os"
 )
 
-func (mp *ManifestProcessor) processTarArchive(manifest Manifest, projectInfo ProjectInfo) error {
-	if err := mp.createTarArchive(manifest.FileList, projectInfo.TarFile, projectInfo.CWD); err != nil {
+func (mp *ManifestProcessor) ProcessTarArchive(manifest Manifest, projectInfo ProjectInfo) error {
+	var fileList []string
+	for file, isCommented := range manifest.FileList {
+		if !isCommented {
+			fileList = append(fileList, file)
+		}
+	}
+
+	if err := mp.createTarArchive(fileList, projectInfo.TarFile, projectInfo.CWD); err != nil {
 		return fmt.Errorf("error creating tar archive: %w", err)
 	}
 
