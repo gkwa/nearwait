@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/go-logr/logr"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -99,7 +100,7 @@ func initConfig() {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		home, err := os.UserHomeDir()
+		home, err := homedir.Dir()
 		cobra.CheckErr(err)
 
 		viper.AddConfigPath(home)

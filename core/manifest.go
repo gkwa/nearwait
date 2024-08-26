@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/mitchellh/go-homedir"
 )
 
 type Manifest struct {
@@ -87,7 +88,7 @@ func (mg *ManifestGenerator) Generate(force bool, manifestFile string) (bool, er
 	if force || isNewManifest {
 		manifest = Manifest{FileList: make(map[string]bool)}
 		for file := range currentFiles {
-			manifest.FileList[file] = true // All files are commented out initially
+			manifest.FileList[file] = true
 		}
 	} else {
 		updatedManifest := mg.updater.UpdateManifest(manifest, currentFiles)
@@ -118,9 +119,19 @@ func (mg *ManifestGenerator) ReadManifest(manifestFile string) (Manifest, error)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "# - ") {
-			manifest.FileList[strings.TrimPrefix(line, "# - ")] = true
+			path := strings.TrimPrefix(line, "# - ")
+			normalizedPath, err := normalizePathForComparison(path)
+			if err != nil {
+				return manifest, err
+			}
+			manifest.FileList[normalizedPath] = true
 		} else if strings.HasPrefix(line, "- ") {
-			manifest.FileList[strings.TrimPrefix(line, "- ")] = false
+			path := strings.TrimPrefix(line, "- ")
+			normalizedPath, err := normalizePathForComparison(path)
+			if err != nil {
+				return manifest, err
+			}
+			manifest.FileList[normalizedPath] = false
 		}
 	}
 
@@ -165,10 +176,15 @@ func (mg *ManifestGenerator) UpdateManifest(manifest Manifest, currentFiles map[
 	updatedManifest := Manifest{FileList: make(map[string]bool)}
 
 	for file := range currentFiles {
-		if isCommented, exists := manifest.FileList[file]; exists {
-			updatedManifest.FileList[file] = isCommented
+		normalizedFile, err := normalizePathForComparison(file)
+		if err != nil {
+			mg.logger.Error(err, "Failed to normalize path", "path", file)
+			continue
+		}
+		if isCommented, exists := manifest.FileList[normalizedFile]; exists {
+			updatedManifest.FileList[normalizedFile] = isCommented
 		} else {
-			updatedManifest.FileList[file] = true
+			updatedManifest.FileList[normalizedFile] = true
 		}
 	}
 
@@ -196,7 +212,11 @@ func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 			if err != nil {
 				return err
 			}
-			files[absPath] = true
+			normalizedPath, err := normalizePathForComparison(absPath)
+			if err != nil {
+				return err
+			}
+			files[normalizedPath] = true
 		}
 
 		return nil
@@ -210,8 +230,12 @@ func (mg *ManifestGenerator) CommentItem(manifestFile, item string) error {
 		return err
 	}
 
-	if _, exists := manifest.FileList[item]; exists {
-		manifest.FileList[item] = true
+	normalizedItem, err := normalizePathForComparison(item)
+	if err != nil {
+		return err
+	}
+	if _, exists := manifest.FileList[normalizedItem]; exists {
+		manifest.FileList[normalizedItem] = true
 		return mg.WriteManifest(manifest, manifestFile)
 	}
 
@@ -224,8 +248,12 @@ func (mg *ManifestGenerator) UncommentItem(manifestFile, item string) error {
 		return err
 	}
 
-	if _, exists := manifest.FileList[item]; exists {
-		manifest.FileList[item] = false
+	normalizedItem, err := normalizePathForComparison(item)
+	if err != nil {
+		return err
+	}
+	if _, exists := manifest.FileList[normalizedItem]; exists {
+		manifest.FileList[normalizedItem] = false
 		return mg.WriteManifest(manifest, manifestFile)
 	}
 
@@ -238,7 +266,11 @@ func (mg *ManifestGenerator) GetItemStatus(manifestFile, item string) (string, e
 		return "", err
 	}
 
-	if isCommented, exists := manifest.FileList[item]; exists {
+	normalizedItem, err := normalizePathForComparison(item)
+	if err != nil {
+		return "", err
+	}
+	if isCommented, exists := manifest.FileList[normalizedItem]; exists {
 		if isCommented {
 			return "disabled", nil
 		}
@@ -246,4 +278,22 @@ func (mg *ManifestGenerator) GetItemStatus(manifestFile, item string) (string, e
 	}
 
 	return "not in list", nil
+}
+
+func normalizePathForComparison(path string) (string, error) {
+	expandedPath, err := homedir.Expand(path)
+	if err != nil {
+		return "", err
+	}
+
+	absPath, err := filepath.Abs(expandedPath)
+	if err != nil {
+		return "", err
+	}
+
+	cleanPath := filepath.Clean(absPath)
+
+	cleanPath = strings.TrimPrefix(cleanPath, "/private")
+
+	return cleanPath, nil
 }
