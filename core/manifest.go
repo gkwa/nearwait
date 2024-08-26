@@ -73,19 +73,32 @@ func (mg *ManifestGenerator) Generate(force bool, manifestFile string) (bool, er
 		return false, fmt.Errorf("error getting current files: %w", err)
 	}
 
-	manifest, err := mg.reader.ReadManifest(manifestFile)
-	if err != nil {
-		return false, fmt.Errorf("error reading manifest: %w", err)
+	var manifest Manifest
+	isNewManifest := true
+
+	if !force {
+		manifest, err = mg.reader.ReadManifest(manifestFile)
+		if err != nil {
+			return false, fmt.Errorf("error reading manifest: %w", err)
+		}
+		isNewManifest = len(manifest.FileList) == 0
 	}
 
-	isNewManifest := len(manifest.FileList) == 0
-	updatedManifest := mg.updater.UpdateManifest(manifest, currentFiles)
+	if force || isNewManifest {
+		manifest = Manifest{FileList: make(map[string]bool)}
+		for file := range currentFiles {
+			manifest.FileList[file] = true // All files are commented out initially
+		}
+	} else {
+		updatedManifest := mg.updater.UpdateManifest(manifest, currentFiles)
+		manifest = updatedManifest
+	}
 
-	if err := mg.writer.WriteManifest(updatedManifest, manifestFile); err != nil {
+	if err := mg.writer.WriteManifest(manifest, manifestFile); err != nil {
 		return false, fmt.Errorf("error writing manifest: %w", err)
 	}
 
-	return isNewManifest, nil
+	return isNewManifest || force, nil
 }
 
 func (mg *ManifestGenerator) ReadManifest(manifestFile string) (Manifest, error) {
