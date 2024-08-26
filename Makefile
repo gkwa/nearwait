@@ -27,7 +27,7 @@ iterate: check $(BIN)
 .PHONY: check # lint and vet
 check: .timestamps/.check.time
 
-.timestamps/.check.time: goimports tidy golines fmt lint vet
+.timestamps/.check.time: goimports tidy fmt lint vet
 	@mkdir -p .timestamps
 	@touch $@
 

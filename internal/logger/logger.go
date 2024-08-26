@@ -15,7 +15,7 @@ import (
 	runtimeLog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func NewConsoleLogger(verbose bool, jsonFormat bool) logr.Logger {
+func NewConsoleLogger(verbose, jsonFormat bool) logr.Logger {
 	var zlog zerolog.Logger
 
 	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {

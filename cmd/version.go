@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	
+
 	"github.com/gkwa/nearwait/version"
 	"github.com/spf13/cobra"
 )
