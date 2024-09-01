@@ -13,8 +13,9 @@ func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 			return err
 		}
 
-		for excludeDir := range mg.excludeDirs {
-			if strings.Contains(path, excludeDir) {
+		parts := strings.Split(path, string(filepath.Separator))
+		for _, part := range parts {
+			if mg.excludeDirs[part] {
 				if d.IsDir() {
 					return filepath.SkipDir
 				}
