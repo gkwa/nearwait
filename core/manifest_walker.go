@@ -3,6 +3,7 @@ package core
 import (
 	"io/fs"
 	"path/filepath"
+	"strings"
 )
 
 func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
@@ -12,15 +13,13 @@ func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 			return err
 		}
 
-		mg.logger.V(1).Info("Encountered file before applying filters", "path", path)
-
-		basename := filepath.Base(path)
-		if _, exists := mg.excludeDirs[basename]; exists {
-			mg.logger.V(1).Info("Exclusion filter applied", "path", path, "filter", basename)
-			if d.IsDir() {
-				return filepath.SkipDir
+		for excludeDir := range mg.excludeDirs {
+			if strings.Contains(path, excludeDir) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
-			return nil
 		}
 
 		if !d.IsDir() {
@@ -33,7 +32,6 @@ func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 				return err
 			}
 			files[normalizedPath] = true
-			mg.logger.V(1).Info("Added file to manifest", "path", normalizedPath)
 		}
 
 		return nil
