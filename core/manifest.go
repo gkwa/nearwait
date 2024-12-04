@@ -70,7 +70,8 @@ func (mg *ManifestGenerator) WithFS(fsys fs.FS) *ManifestGenerator {
 
 func (mg *ManifestGenerator) isExcluded(path string) bool {
 	mg.logger.V(1).Info("Checking if path is excluded", "path", path)
-	parts := strings.Split(path, string(filepath.Separator))
+	path = filepath.ToSlash(path)
+	parts := strings.Split(path, "/")
 	mg.logger.V(1).Info("Split path into parts", "parts", parts)
 	for _, part := range parts {
 		mg.logger.V(1).Info("Checking part", "part", part)
