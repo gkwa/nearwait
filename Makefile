@@ -25,7 +25,7 @@ all: check $(BIN) install
 iterate: check $(BIN)
 
 .PHONY: check # lint and vet
-check: .timestamps/.check.time
+check: .timestamps/.check.time goimports
 
 .timestamps/.check.time: goimports tidy fmt lint vet
 	@mkdir -p .timestamps
@@ -89,7 +89,7 @@ vet: .timestamps/.vet.time
 	@touch $@
 
 .PHONY: test # go test
-test: goimports
+test:
 	go test ./...
 	@mkdir -p .timestamps
 	@touch $@
