@@ -2,37 +2,28 @@ package core
 
 import (
 	"io/fs"
-	"path/filepath"
-	"strings"
 )
 
 func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
+	return mg.getFilesFromFS(mg.fsys)
+}
+
+func (mg *ManifestGenerator) getFilesFromFS(fsys fs.FS) (map[string]bool, error) {
 	files := make(map[string]bool)
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		parts := strings.Split(path, string(filepath.Separator))
-		for _, part := range parts {
-			if mg.excludeDirs[part] {
-				if d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
+		if mg.isExcluded(path) {
+			if d.IsDir() {
+				return fs.SkipDir
 			}
+			return nil
 		}
 
 		if !d.IsDir() {
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return err
-			}
-			normalizedPath, err := normalizePathForComparison(absPath)
-			if err != nil {
-				return err
-			}
-			files[normalizedPath] = true
+			files[path] = true
 		}
 
 		return nil

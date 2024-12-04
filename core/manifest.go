@@ -1,6 +1,10 @@
 package core
 
 import (
+	"io/fs"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-logr/logr"
 )
 
@@ -31,6 +35,7 @@ type ManifestGenerator struct {
 	writer      ManifestWriter
 	updater     ManifestUpdater
 	walker      FileSystemWalker
+	fsys        fs.FS
 }
 
 func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
@@ -49,10 +54,32 @@ func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
 			"node_modules":  true,
 			"target/debug":  true,
 		},
+		fsys: nil,
 	}
 	mg.reader = mg
 	mg.writer = mg
 	mg.updater = mg
 	mg.walker = mg
 	return mg
+}
+
+func (mg *ManifestGenerator) WithFS(fsys fs.FS) *ManifestGenerator {
+	mg.fsys = fsys
+	return mg
+}
+
+func (mg *ManifestGenerator) isExcluded(path string) bool {
+	mg.logger.V(1).Info("Checking if path is excluded", "path", path)
+	parts := strings.Split(path, string(filepath.Separator))
+	mg.logger.V(1).Info("Split path into parts", "parts", parts)
+	for _, part := range parts {
+		mg.logger.V(1).Info("Checking part", "part", part)
+		if mg.excludeDirs[part] {
+			mg.logger.V(1).Info("Part has been excluded", "part", part)
+			return true
+		}
+		mg.logger.V(1).Info("Part is not excluded", "part", part)
+	}
+	mg.logger.V(1).Info("Path is not excluded", "path", path)
+	return false
 }
