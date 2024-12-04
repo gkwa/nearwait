@@ -1,155 +1,154 @@
 package core
 
 import (
+	"errors"
 	"io/fs"
 	"path/filepath"
-	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 )
 
+func testLogger(t *testing.T) logr.Logger {
+	return zapr.NewLogger(zaptest.NewLogger(t))
+}
+
 func TestGetCurrentFiles(t *testing.T) {
-	testCases := []struct {
-		name          string
-		files         []string
-		excludeDirs   []string
-		expectedFiles []string
-		expectError   bool
+	tests := []struct {
+		name    string
+		files   map[string]*fstest.MapFile
+		exclude map[string]bool
+		want    []string
 	}{
 		{
 			name: "Basic file structure",
-			files: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"dir2/file3.txt",
+			files: map[string]*fstest.MapFile{
+				"file1.txt":      {},
+				"dir1/file2.txt": {},
+				"dir2/file3.txt": {},
 			},
-			excludeDirs: []string{},
-			expectedFiles: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"dir2/file3.txt",
-			},
+			want: []string{"dir1/file2.txt", "dir2/file3.txt", "file1.txt"},
 		},
 		{
 			name: "With excluded directory",
-			files: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"excluded/file3.txt",
+			files: map[string]*fstest.MapFile{
+				"file1.txt":          {},
+				"dir1/file2.txt":     {},
+				"excluded/file3.txt": {},
 			},
-			excludeDirs: []string{"excluded"},
-			expectedFiles: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-			},
+			exclude: map[string]bool{"excluded": true},
+			want:    []string{"dir1/file2.txt", "file1.txt"},
 		},
 		{
 			name: "With nested excluded directory",
-			files: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"dir1/excluded/file3.txt",
-				"dir2/file4.txt",
+			files: map[string]*fstest.MapFile{
+				"file1.txt":               {},
+				"dir1/file2.txt":          {},
+				"dir1/excluded/file3.txt": {},
+				"dir2/file4.txt":          {},
 			},
-			excludeDirs: []string{"excluded"},
-			expectedFiles: []string{
-				"file1.txt",
-				"dir1/file2.txt",
-				"dir2/file4.txt",
-			},
+			exclude: map[string]bool{"excluded": true},
+			want:    []string{"dir1/file2.txt", "dir2/file4.txt", "file1.txt"},
 		},
 		{
 			name: "With multiple excluded directories",
-			files: []string{
-				"file1.txt",
-				"exclude1/file2.txt",
-				"dir1/exclude2/file3.txt",
-				"dir2/file4.txt",
+			files: map[string]*fstest.MapFile{
+				"file1.txt":               {},
+				"exclude1/file2.txt":      {},
+				"dir1/exclude2/file3.txt": {},
+				"dir2/file4.txt":          {},
 			},
-			excludeDirs: []string{"exclude1", "exclude2"},
-			expectedFiles: []string{
-				"file1.txt",
-				"dir2/file4.txt",
-			},
+			exclude: map[string]bool{"exclude1": true, "exclude2": true},
+			want:    []string{"dir2/file4.txt", "file1.txt"},
 		},
 		{
 			name: "With excluded directory as substring",
-			files: []string{
-				"file1.txt",
-				"exclude/file2.txt",
-				"not_excluded/file3.txt",
-				"excluded/file4.txt",
-				"dir1/exclude_nested/file5.txt",
-				"dir2/excluded_nested/file6.txt",
+			files: map[string]*fstest.MapFile{
+				"file1.txt":                      {},
+				"exclude/file2.txt":              {},
+				"excluded/file4.txt":             {},
+				"not_excluded/file3.txt":         {},
+				"dir1/exclude_nested/file5.txt":  {},
+				"dir2/excluded_nested/file6.txt": {},
 			},
-			excludeDirs: []string{"exclude"},
-			expectedFiles: []string{
-				"file1.txt",
-				"not_excluded/file3.txt",
-				"excluded/file4.txt",
+			exclude: map[string]bool{"exclude": true},
+			want: []string{
 				"dir1/exclude_nested/file5.txt",
 				"dir2/excluded_nested/file6.txt",
+				"excluded/file4.txt",
+				"file1.txt",
+				"not_excluded/file3.txt",
 			},
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			fsys := createTestFS(tc.files)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fsys := fstest.MapFS(tt.files)
+			mg := NewManifestGenerator(testLogger(t))
+			mg.excludeDirs = tt.exclude
+			mg.WithFS(fsys)
 
-			config := zap.NewDevelopmentConfig()
-			config.EncoderConfig.TimeKey = ""
-			config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-			zapLogger, _ := config.Build()
-			logger := zapr.NewLogger(zapLogger)
-
-			mg := NewManifestGenerator(logger)
-			mg.excludeDirs = make(map[string]bool)
-			for _, dir := range tc.excludeDirs {
-				mg.excludeDirs[dir] = true
+			got, err := mg.GetCurrentFiles()
+			if err != nil {
+				t.Errorf("GetCurrentFiles() error = %v", err)
+				return
 			}
 
-			files, err := mg.getFilesFromFS(fsys)
+			var gotFiles []string
+			for file := range got {
+				gotFiles = append(gotFiles, filepath.ToSlash(file))
+			}
+			sort.Strings(gotFiles)
 
-			if tc.expectError {
-				if err == nil {
-					t.Errorf("Expected an error, but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+			want := make([]string, len(tt.want))
+			copy(want, tt.want)
+			sort.Strings(want)
 
-				gotFiles := make([]string, 0, len(files))
-				for file := range files {
-					gotFiles = append(gotFiles, filepath.ToSlash(file))
-				}
+			if len(gotFiles) != len(want) {
+				t.Errorf("Files mismatch.\nExpected:\n%v\nGot:\n%v",
+					joinNewlines(want),
+					joinNewlines(gotFiles))
+				return
+			}
 
-				sort.Strings(gotFiles)
-				sort.Strings(tc.expectedFiles)
-
-				if !reflect.DeepEqual(gotFiles, tc.expectedFiles) {
-					t.Errorf("Files mismatch.\nExpected:\n%s\nGot:\n%s", formatFiles(tc.expectedFiles), formatFiles(gotFiles))
+			for i := range want {
+				if gotFiles[i] != want[i] {
+					t.Errorf("Files mismatch.\nExpected:\n%v\nGot:\n%v",
+						joinNewlines(want),
+						joinNewlines(gotFiles))
+					return
 				}
 			}
 		})
 	}
 }
 
-func createTestFS(files []string) fs.FS {
-	fsys := fstest.MapFS{}
-	for _, file := range files {
-		fsys[file] = &fstest.MapFile{Data: []byte("test")}
+func joinNewlines(strs []string) string {
+	var result string
+	for _, s := range strs {
+		result += s + "\n"
 	}
-	return fsys
+	return result
 }
 
-func formatFiles(files []string) string {
-	return "  " + strings.Join(files, "\n  ")
+// Mock error file system for testing
+type errorFS struct{ err error }
+
+func (e errorFS) Open(name string) (fs.File, error)          { return nil, e.err }
+func (e errorFS) ReadDir(name string) ([]fs.DirEntry, error) { return nil, e.err }
+func (e errorFS) Stat(name string) (fs.FileInfo, error)      { return nil, e.err }
+
+func TestGetCurrentFilesError(t *testing.T) {
+	mg := NewManifestGenerator(testLogger(t))
+	mg.WithFS(errorFS{errors.New("mock error")})
+
+	_, err := mg.GetCurrentFiles()
+	if err == nil {
+		t.Error("Expected error from GetCurrentFiles with error FS")
+	}
 }
