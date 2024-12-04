@@ -7,6 +7,10 @@ import (
 func (mg *ManifestGenerator) Generate(force bool, manifestFile string) (bool, error) {
 	mg.logger.V(1).Info("Generating manifest")
 
+	if mg.fsys == nil {
+		return false, fmt.Errorf("nil filesystem")
+	}
+
 	currentFiles, err := mg.walker.GetCurrentFiles()
 	if err != nil {
 		return false, fmt.Errorf("error getting current files: %w", err)

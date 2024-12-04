@@ -33,6 +33,8 @@ var rootCmd = &cobra.Command{
 		logger := LoggerFrom(cmd.Context())
 
 		generator := core.NewManifestGenerator(logger)
+		generator.WithFS(os.DirFS(".")) // Initialize with default filesystem
+
 		isNewManifest, err := generator.Generate(force, manifestFile)
 		if err != nil {
 			logger.Error(err, "Failed to generate manifest")
