@@ -40,7 +40,7 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 		TempDir:    tempDir,
 		TarFile:    filepath.Join(tempDir, fmt.Sprintf("%s.tar", projectName)),
 		ExtractDir: filepath.Join(tempDir, projectName),
-		TxtarFile:  txtarFilename,
+		TxtarFile:  filepath.Join(filepath.Dir(mp.manifestFile), txtarFilename),
 	}
 
 	return info, nil

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +19,17 @@ func normalizePathForComparison(path string) (string, error) {
 		return "", err
 	}
 
-	cleanPath := filepath.Clean(absPath)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
 
+	relPath, err := filepath.Rel(cwd, absPath)
+	if err != nil {
+		return "", err
+	}
+
+	cleanPath := filepath.Clean(relPath)
 	cleanPath = strings.TrimPrefix(cleanPath, "/private")
 
 	return cleanPath, nil

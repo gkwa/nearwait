@@ -20,10 +20,20 @@ func (mp *ManifestProcessor) createTarArchive(files []string, tarFile, baseDir s
 	defer tw.Close()
 
 	for _, file := range files {
-		relPath, err := filepath.Rel(baseDir, file)
+		absFile, err := filepath.Abs(file)
 		if err != nil {
 			return err
 		}
+		absBase, err := filepath.Abs(baseDir)
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(absBase, absFile)
+		if err != nil {
+			return err
+		}
+
 		mp.logger.V(1).Info("Adding file to tar", "file", relPath)
 		if err := addToTar(tw, file, relPath); err != nil {
 			return err

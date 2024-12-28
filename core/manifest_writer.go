@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 )
 
@@ -26,13 +27,21 @@ func (mg *ManifestGenerator) WriteManifest(manifest Manifest, manifestFile strin
 	}
 	sort.Strings(sortedFiles)
 
+	manifestDir := filepath.Dir(manifestFile)
+
 	for _, file := range sortedFiles {
 		isCommented := manifest.FileList[file]
 		prefix := "- "
 		if isCommented {
 			prefix = "# - "
 		}
-		_, err = writer.WriteString(fmt.Sprintf("%s%s\n", prefix, file))
+
+		relPath, err := filepath.Rel(manifestDir, file)
+		if err != nil {
+			return err
+		}
+
+		_, err = writer.WriteString(fmt.Sprintf("%s%s\n", prefix, relPath))
 		if err != nil {
 			return err
 		}
