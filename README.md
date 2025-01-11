@@ -17,19 +17,23 @@ Working with GPT to iterate on editing project files.
 ## Usage
 
 1. Run Nearwait in your project directory:
+
    ```
    nearwait
    ```
+
    This generates the initial `.nearwait.yml` manifest with all files commented out.
 
 1. Edit the `.nearwait.yml` file to uncomment (enable) the files you want to include:
+
    ```yaml
    filelist:
-   # - /path/to/excluded/file.txt
-   - /path/to/included/file.txt
+     # - /path/to/excluded/file.txt
+     - /path/to/included/file.txt
    ```
 
 1. Run Nearwait again to process the manifest and generate the txtar archive:
+
    ```
    nearwait
    ```
@@ -63,11 +67,13 @@ go install github.com/gkwa/nearwait@latest
 To build Nearwait from source:
 
 1. Clone the repository:
+
    ```
    git clone https://github.com/gkwa/nearwait.git
    ```
 
 1. Navigate to the project directory:
+
    ```
    cd nearwait
    ```
