@@ -31,6 +31,7 @@ type FileSystemWalker interface {
 type ManifestGenerator struct {
 	logger      logr.Logger
 	excludeDirs map[string]bool
+	includeDirs map[string]bool
 	reader      ManifestReader
 	writer      ManifestWriter
 	updater     ManifestUpdater
@@ -55,12 +56,22 @@ func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
 			"node_modules":      true,
 			"target/debug":      true,
 		},
-		fsys: nil,
+		includeDirs: make(map[string]bool),
+		fsys:        nil,
 	}
 	mg.reader = mg
 	mg.writer = mg
 	mg.updater = mg
 	mg.walker = mg
+	return mg
+}
+
+func (mg *ManifestGenerator) WithIncludes(includes []string) *ManifestGenerator {
+	for _, dir := range includes {
+		cleanDir := filepath.Clean(dir)
+		mg.includeDirs[cleanDir] = true
+		mg.logger.V(1).Info("Added include directory", "dir", cleanDir)
+	}
 	return mg
 }
 
@@ -70,18 +81,39 @@ func (mg *ManifestGenerator) WithFS(fsys fs.FS) *ManifestGenerator {
 }
 
 func (mg *ManifestGenerator) isExcluded(path string) bool {
-	mg.logger.V(1).Info("Checking if path is excluded", "path", path)
-	path = filepath.ToSlash(path)
-	parts := strings.Split(path, "/")
-	mg.logger.V(1).Info("Split path into parts", "parts", parts)
+	if path == "." {
+		return false
+	}
+
+	cleanPath := filepath.Clean(path)
+
+	// First check excludes
+	parts := strings.Split(cleanPath, string(filepath.Separator))
 	for _, part := range parts {
-		mg.logger.V(1).Info("Checking part", "part", part)
 		if mg.excludeDirs[part] {
-			mg.logger.V(1).Info("Part has been excluded", "part", part)
 			return true
 		}
-		mg.logger.V(1).Info("Part is not excluded", "part", part)
 	}
-	mg.logger.V(1).Info("Path is not excluded", "path", path)
+
+	// Then check includes if specified
+	if len(mg.includeDirs) > 0 {
+		// Check if this is a directory entry
+		isDir := !strings.Contains(cleanPath, ".")
+
+		for dir := range mg.includeDirs {
+			// If it's the include dir itself or a file under it
+			if cleanPath == dir || strings.HasPrefix(cleanPath, dir+string(filepath.Separator)) {
+				return false
+			}
+
+			// If it's a directory that might contain included paths
+			if isDir && strings.HasPrefix(dir, cleanPath+string(filepath.Separator)) {
+				return false
+			}
+		}
+
+		return true
+	}
+
 	return false
 }
