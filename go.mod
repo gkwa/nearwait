@@ -1,6 +1,8 @@
 module github.com/gkwa/nearwait
 
-go 1.22.4
+go 1.23.0
+
+toolchain go1.23.4
 
 require (
 	github.com/atotto/clipboard v0.1.4
@@ -9,7 +11,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
 	github.com/go-logr/zerologr v1.2.3
-	github.com/google/go-containerregistry v0.20.2
+	github.com/google/go-containerregistry v0.20.3
 	github.com/magefile/mage v1.15.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/rs/zerolog v1.33.0
