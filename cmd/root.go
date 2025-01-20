@@ -109,9 +109,8 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
+	// Just read the config silently
+	viper.ReadInConfig()
 
 	logFormat = viper.GetString("log-format")
 	verbose = viper.GetBool("verbose")
