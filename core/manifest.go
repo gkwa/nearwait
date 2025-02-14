@@ -29,14 +29,15 @@ type FileSystemWalker interface {
 }
 
 type ManifestGenerator struct {
-	logger      logr.Logger
-	excludeDirs map[string]bool
-	includeDirs map[string]bool
-	reader      ManifestReader
-	writer      ManifestWriter
-	updater     ManifestUpdater
-	walker      FileSystemWalker
-	fsys        fs.FS
+	logger         logr.Logger
+	excludeDirs    map[string]bool
+	includeDirs    map[string]bool
+	reader         ManifestReader
+	writer         ManifestWriter
+	updater        ManifestUpdater
+	walker         FileSystemWalker
+	fsys           fs.FS
+	excludesActive bool
 }
 
 func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
@@ -56,14 +57,19 @@ func NewManifestGenerator(logger logr.Logger) *ManifestGenerator {
 			"node_modules":      true,
 			"target/debug":      true,
 		},
-		includeDirs: make(map[string]bool),
-		fsys:        nil,
+		includeDirs:    make(map[string]bool),
+		fsys:           nil,
+		excludesActive: true,
 	}
 	mg.reader = mg
 	mg.writer = mg
 	mg.updater = mg
 	mg.walker = mg
 	return mg
+}
+
+func (mg *ManifestGenerator) DisableExcludes() {
+	mg.excludesActive = false
 }
 
 func (mg *ManifestGenerator) WithIncludes(includes []string) *ManifestGenerator {
@@ -87,11 +93,13 @@ func (mg *ManifestGenerator) isExcluded(path string) bool {
 
 	cleanPath := filepath.Clean(path)
 
-	// First check excludes
-	parts := strings.Split(cleanPath, string(filepath.Separator))
-	for _, part := range parts {
-		if mg.excludeDirs[part] {
-			return true
+	// First check excludes if they are active
+	if mg.excludesActive {
+		parts := strings.Split(cleanPath, string(filepath.Separator))
+		for _, part := range parts {
+			if mg.excludeDirs[part] {
+				return true
+			}
 		}
 	}
 

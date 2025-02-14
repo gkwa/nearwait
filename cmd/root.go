@@ -24,6 +24,7 @@ var (
 	debug        bool
 	manifestFile string
 	includes     []string
+	noExclude    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -36,6 +37,9 @@ var rootCmd = &cobra.Command{
 		generator.WithFS(os.DirFS(".")) // Initialize with default filesystem
 		if len(includes) > 0 {
 			generator.WithIncludes(includes)
+		}
+		if noExclude {
+			generator.DisableExcludes()
 		}
 		isNewManifest, err := generator.Generate(force, manifestFile)
 		if err != nil {
@@ -84,6 +88,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Keep temporary directory for debugging")
 	rootCmd.PersistentFlags().StringVar(&manifestFile, "manifest", ".nearwait.yml", "Name of the manifest file")
 	rootCmd.PersistentFlags().StringSliceVar(&includes, "include", nil, "Include only specified directories")
+	rootCmd.PersistentFlags().BoolVar(&noExclude, "no-exclude", false, "Disable default directory exclusions")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
 		fmt.Printf("Error binding verbose flag: %v\n", err)
