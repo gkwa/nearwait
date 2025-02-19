@@ -76,7 +76,7 @@ func (mg *ManifestGenerator) WithIncludes(includes []string) *ManifestGenerator 
 	for _, dir := range includes {
 		cleanDir := filepath.Clean(dir)
 		mg.includeDirs[cleanDir] = true
-		mg.logger.V(1).Info("Added include path", "path", cleanDir)
+		mg.logger.V(1).Info("Added include directory", "dir", cleanDir)
 	}
 	return mg
 }
@@ -93,25 +93,7 @@ func (mg *ManifestGenerator) isExcluded(path string) bool {
 
 	cleanPath := filepath.Clean(path)
 
-	// Check if the path is in our includes
-	if len(mg.includeDirs) > 0 {
-		// First check exact matches
-		if mg.includeDirs[cleanPath] {
-			return false
-		}
-
-		// Then check if it's under any include directory
-		for include := range mg.includeDirs {
-			if !strings.Contains(filepath.Base(include), ".") { // if include is a directory
-				if strings.HasPrefix(cleanPath, include+string(filepath.Separator)) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-
-	// Check excludes if no includes are specified
+	// First check excludes if they are active
 	if mg.excludesActive {
 		parts := strings.Split(cleanPath, string(filepath.Separator))
 		for _, part := range parts {
@@ -119,6 +101,26 @@ func (mg *ManifestGenerator) isExcluded(path string) bool {
 				return true
 			}
 		}
+	}
+
+	// Then check includes if specified
+	if len(mg.includeDirs) > 0 {
+		// Check if this is a directory entry
+		isDir := !strings.Contains(cleanPath, ".")
+
+		for dir := range mg.includeDirs {
+			// If it's the include dir itself or a file under it
+			if cleanPath == dir || strings.HasPrefix(cleanPath, dir+string(filepath.Separator)) {
+				return false
+			}
+
+			// If it's a directory that might contain included paths
+			if isDir && strings.HasPrefix(dir, cleanPath+string(filepath.Separator)) {
+				return false
+			}
+		}
+
+		return true
 	}
 
 	return false
