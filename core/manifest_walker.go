@@ -10,6 +10,30 @@ import (
 func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 	files := make(map[string]bool)
 
+	// If no includes are specified, walk the current directory
+	if len(mg.includeDirs) == 0 {
+		err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// Skip if it's a directory
+			if info.IsDir() {
+				if mg.isExcluded(path) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			if !mg.isExcluded(path) {
+				files[path] = true
+			}
+
+			return nil
+		})
+		return files, err
+	}
+
 	// Process each include path
 	for includePath := range mg.includeDirs {
 		// Handle direct file includes
