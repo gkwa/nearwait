@@ -23,7 +23,7 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 	}
 
 	projectName := filepath.Base(cwd)
-	tempDir := filepath.Join(cwd, fmt.Sprintf("tmp_%s", projectName))
+	tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("nearwait_%s", projectName))
 	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		return ProjectInfo{}, fmt.Errorf("error creating temp directory: %w", err)
 	}
