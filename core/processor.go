@@ -25,6 +25,7 @@ type ManifestProcessor struct {
 	debug        bool
 	manifestFile string
 	byteSize     int64
+	prompt       bool
 	reader       ManifestReader
 	archiver     ArchiveProcessor
 }
@@ -34,7 +35,8 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 		logger:       logger,
 		debug:        debug,
 		manifestFile: manifestFile,
-		byteSize:     0, // default to no batching
+		byteSize:     0,     // default to no batching
+		prompt:       false, // default to no prompting
 	}
 	mp.reader = NewManifestGenerator(logger)
 	mp.archiver = mp
@@ -43,6 +45,11 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 
 func (mp *ManifestProcessor) WithByteSize(byteSize int64) *ManifestProcessor {
 	mp.byteSize = byteSize
+	return mp
+}
+
+func (mp *ManifestProcessor) WithPrompt(prompt bool) *ManifestProcessor {
+	mp.prompt = prompt
 	return mp
 }
 
@@ -115,50 +122,107 @@ func (mp *ManifestProcessor) processBatches(uncommentedFiles []string) (bool, er
 		return false, err
 	}
 
-	mp.logger.Info(fmt.Sprintf("Created %d batches of files", len(batches)))
+	// Print batch information
+	fmt.Printf("Created %d batches of files\n", len(batches))
 
-	// Process each batch
-	for i, batch := range batches {
-		mp.logger.Info(fmt.Sprintf("Processing batch %d/%d (%d files, %d bytes)",
-			i+1, len(batches), len(batch.Files), batch.Size))
+	// In verbose/prompt mode, we'll show detailed progress for each batch
+	if mp.prompt {
+		// Process each batch with detailed output
+		for i, batch := range batches {
+			fmt.Printf("Processing batch %d/%d (%d files, %d bytes)\n",
+				i+1, len(batches), len(batch.Files), batch.Size)
 
-		// Log files in this batch
-		for j, file := range batch.Files {
-			mp.logger.V(1).Info(fmt.Sprintf("  Batch %d file %d: %s", i+1, j+1, file))
+			// Log files in this batch only in verbose mode
+			for j, file := range batch.Files {
+				mp.logger.V(1).Info(fmt.Sprintf("  Batch %d file %d: %s", i+1, j+1, file))
+			}
+
+			// Process this batch
+			if err := mp.processBatchWithInfo(i, batch, len(batches)); err != nil {
+				return false, err
+			}
 		}
+	} else {
+		// In non-prompt mode, just process all batches with minimal output
+		for i, batch := range batches {
+			mp.logger.V(1).Info(fmt.Sprintf("Processing batch %d/%d (%d files, %d bytes)",
+				i+1, len(batches), len(batch.Files), batch.Size))
 
-		// Create a fresh project info for each batch with a unique temp directory
-		projectInfo, err := mp.setupBatchProjectInfo(i + 1)
-		if err != nil {
-			return false, err
-		}
+			// Log files in this batch only in verbose mode
+			for j, file := range batch.Files {
+				mp.logger.V(1).Info(fmt.Sprintf("  Batch %d file %d: %s", i+1, j+1, file))
+			}
 
-		// Clean up after this batch unless debug is enabled
-		if !mp.debug {
-			defer os.RemoveAll(projectInfo.TempDir)
-		}
-
-		// Create a batch-specific manifest
-		batchManifest := Manifest{FileList: make(map[string]bool)}
-		for _, file := range batch.Files {
-			batchManifest.FileList[file] = false
-		}
-
-		// Process this batch
-		if err := mp.processBatch(batchManifest, projectInfo); err != nil {
-			return false, err
-		}
-
-		// Wait for user to press enter before processing the next batch
-		if i < len(batches)-1 {
-			fmt.Printf("Batch %d/%d copied to clipboard. Press Enter to process next batch...", i+1, len(batches))
-			fmt.Scanln()
-		} else {
-			fmt.Printf("Final batch %d/%d copied to clipboard.\n", i+1, len(batches))
+			// Process this batch silently
+			if err := mp.processBatchSilently(i, batch, len(batches)); err != nil {
+				return false, err
+			}
 		}
 	}
 
 	return false, nil
+}
+
+// processBatchWithInfo processes a batch with user-friendly output
+func (mp *ManifestProcessor) processBatchWithInfo(batchIndex int, batch FileBatch, totalBatches int) error {
+	// Create a fresh project info for this batch
+	projectInfo, err := mp.setupBatchProjectInfo(batchIndex + 1)
+	if err != nil {
+		return err
+	}
+
+	// Clean up after this batch unless debug is enabled
+	if !mp.debug {
+		defer os.RemoveAll(projectInfo.TempDir)
+	}
+
+	// Create a batch-specific manifest
+	batchManifest := Manifest{FileList: make(map[string]bool)}
+	for _, file := range batch.Files {
+		batchManifest.FileList[file] = false
+	}
+
+	// Process this batch
+	if err := mp.processBatch(batchManifest, projectInfo); err != nil {
+		return err
+	}
+
+	// Wait for user to press enter before processing the next batch
+	if batchIndex < totalBatches-1 {
+		fmt.Printf("Batch %d/%d copied to clipboard. Press Enter to process next batch...", batchIndex+1, totalBatches)
+		fmt.Scanln()
+	} else {
+		fmt.Printf("Final batch %d/%d copied to clipboard.\n", batchIndex+1, totalBatches)
+	}
+
+	return nil
+}
+
+// processBatchSilently processes a batch without intermediate output
+func (mp *ManifestProcessor) processBatchSilently(batchIndex int, batch FileBatch, totalBatches int) error {
+	// Create a fresh project info for this batch
+	projectInfo, err := mp.setupBatchProjectInfo(batchIndex + 1)
+	if err != nil {
+		return err
+	}
+
+	// Clean up after this batch unless debug is enabled
+	if !mp.debug {
+		defer os.RemoveAll(projectInfo.TempDir)
+	}
+
+	// Create a batch-specific manifest
+	batchManifest := Manifest{FileList: make(map[string]bool)}
+	for _, file := range batch.Files {
+		batchManifest.FileList[file] = false
+	}
+
+	// Process this batch
+	if err := mp.processBatch(batchManifest, projectInfo); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (mp *ManifestProcessor) processBatch(manifest Manifest, projectInfo ProjectInfo) error {
@@ -213,8 +277,8 @@ func (mp *ManifestProcessor) createBatches(files []string) ([]FileBatch, error) 
 
 		// If a single file is larger than byteSize, warn but include it in its own batch
 		if fileSize > mp.byteSize {
-			mp.logger.Info(fmt.Sprintf("Warning: File %s size (%d bytes) exceeds batch size limit (%d bytes)",
-				file, fileSize, mp.byteSize))
+			fmt.Printf("Warning: File %s size (%d bytes) exceeds batch size limit (%d bytes)\n",
+				file, fileSize, mp.byteSize)
 			oversizedFiles = append(oversizedFiles, file)
 		}
 	}

@@ -26,6 +26,7 @@ var (
 	includes     []string
 	noExclude    bool
 	byteSize     int64
+	prompt       bool
 )
 
 var rootCmd = &cobra.Command{
@@ -34,6 +35,12 @@ var rootCmd = &cobra.Command{
 	Long:  `Nearwait is a tool that copies project files to the clipboard according to what's specified in a local manifest YAML file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := LoggerFrom(cmd.Context())
+
+		// Validate flags
+		if prompt && byteSize == 0 {
+			return fmt.Errorf("--prompt can only be used with --byte-size")
+		}
+
 		generator := core.NewManifestGenerator(logger)
 		generator.WithFS(os.DirFS(".")) // Initialize with default filesystem
 		if len(includes) > 0 {
@@ -54,6 +61,7 @@ var rootCmd = &cobra.Command{
 		}
 		processor := core.NewManifestProcessor(logger, debug, manifestFile)
 		processor.WithByteSize(byteSize)
+		processor.WithPrompt(prompt)
 		isEmpty, err := processor.Process()
 		if err != nil {
 			logger.Error(err, "Failed to process manifest")
@@ -92,6 +100,7 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceVar(&includes, "include", nil, "Include only specified directories")
 	rootCmd.PersistentFlags().BoolVar(&noExclude, "no-exclude", false, "Disable default directory exclusions")
 	rootCmd.PersistentFlags().Int64Var(&byteSize, "byte-size", 0, "Maximum byte size per batch of files to copy")
+	rootCmd.PersistentFlags().BoolVar(&prompt, "prompt", false, "Prompt before processing each batch (only valid with --byte-size)")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
 		fmt.Printf("Error binding verbose flag: %v\n", err)
