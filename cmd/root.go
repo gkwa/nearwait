@@ -25,6 +25,7 @@ var (
 	manifestFile string
 	includes     []string
 	noExclude    bool
+	byteSize     int64
 )
 
 var rootCmd = &cobra.Command{
@@ -52,6 +53,7 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 		processor := core.NewManifestProcessor(logger, debug, manifestFile)
+		processor.WithByteSize(byteSize)
 		isEmpty, err := processor.Process()
 		if err != nil {
 			logger.Error(err, "Failed to process manifest")
@@ -89,6 +91,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&manifestFile, "manifest", ".nearwait.yml", "Name of the manifest file")
 	rootCmd.PersistentFlags().StringSliceVar(&includes, "include", nil, "Include only specified directories")
 	rootCmd.PersistentFlags().BoolVar(&noExclude, "no-exclude", false, "Disable default directory exclusions")
+	rootCmd.PersistentFlags().Int64Var(&byteSize, "byte-size", 0, "Maximum byte size per batch of files to copy")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
 		fmt.Printf("Error binding verbose flag: %v\n", err)
