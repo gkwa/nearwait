@@ -46,7 +46,7 @@ func NewConsoleLogger(verbose, jsonFormat bool) logr.Logger {
 	if verbose {
 		zlog = zlog.Level(zerolog.DebugLevel)
 	} else {
-		zlog = zlog.Level(zerolog.WarnLevel) // Change from InfoLevel to WarnLevel
+		zlog = zlog.Level(zerolog.InfoLevel)
 	}
 
 	gcrLog.Warn.SetOutput(io.Discard)
