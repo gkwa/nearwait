@@ -28,6 +28,7 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 
 	mp.logger.V(1).Info("Creating batched txtar archives",
 		"batch_kbytes", mp.batchKBytes,
+		"batch_bytes", batchBytes,
 		"extract_dir", projectInfo.ExtractDir)
 
 	// Get all files and their sizes in the extraction directory
@@ -40,6 +41,10 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 			relPath, err := filepath.Rel(projectInfo.ExtractDir, path)
 			if err != nil {
 				return err
+			}
+			// Skip the .tar file
+			if filepath.Ext(path) == ".tar" {
+				return nil
 			}
 			// Account for txtar overhead: each file adds a header line plus a newline
 			// The txtar format adds: "-- filename --\n" + content + "\n"
@@ -55,7 +60,7 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 		return nil, err
 	}
 
-	// Sort files by size in descending order
+	// Sort files by size to help distribute large files
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Size > files[j].Size
 	})
@@ -69,6 +74,12 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 	for _, file := range files {
 		// If file is larger than batch size, create its own batch
 		if file.Size > batchBytes {
+			// If a current batch exists, add it and start a new set of batches
+			if len(currentBatch) > 0 {
+				batches = append(batches, currentBatch)
+				currentBatch = []FileInfo{}
+				currentSize = 0
+			}
 			batches = append(batches, []FileInfo{file})
 			continue
 		}
@@ -118,7 +129,6 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 			"batch", i+1,
 			"file_count", len(batch),
 			"path", batchFileName)
-
 		batchFiles = append(batchFiles, batchFileName)
 	}
 
