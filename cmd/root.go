@@ -26,6 +26,7 @@ var (
 	includes     []string
 	noExclude    bool
 	batchKBytes  int64
+	waitBatch    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -54,6 +55,7 @@ var rootCmd = &cobra.Command{
 		}
 		processor := core.NewManifestProcessor(logger, debug, manifestFile)
 		processor.WithBatchKBytes(batchKBytes)
+		processor.WithWaitBatch(waitBatch)
 		isEmpty, err := processor.Process()
 		if err != nil {
 			logger.Error(err, "Failed to process manifest")
@@ -92,6 +94,7 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceVar(&includes, "include", nil, "Include only specified directories")
 	rootCmd.PersistentFlags().BoolVar(&noExclude, "no-exclude", false, "Disable default directory exclusions")
 	rootCmd.PersistentFlags().Int64Var(&batchKBytes, "batch-kbytes", 0, "Maximum size of each batch in kilobytes (0 = no batching)")
+	rootCmd.PersistentFlags().BoolVar(&waitBatch, "wait-batch", false, "Wait for user confirmation before copying next batch")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
 		fmt.Printf("Error binding verbose flag: %v\n", err)

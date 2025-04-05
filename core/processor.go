@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"time"
@@ -29,6 +30,7 @@ type ManifestProcessor struct {
 	debug        bool
 	manifestFile string
 	batchKBytes  int64
+	waitBatch    bool
 	reader       ManifestReader
 	archiver     ArchiveProcessor
 	clipboard    ClipboardWriter
@@ -40,6 +42,7 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 		debug:        debug,
 		manifestFile: manifestFile,
 		batchKBytes:  0,
+		waitBatch:    false,
 		clipboard:    &SystemClipboard{},
 	}
 	mp.reader = NewManifestGenerator(logger)
@@ -50,6 +53,12 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 // WithBatchKBytes sets the maximum size for each batch of files in kilobytes
 func (mp *ManifestProcessor) WithBatchKBytes(batchKBytes int64) *ManifestProcessor {
 	mp.batchKBytes = batchKBytes
+	return mp
+}
+
+// WithWaitBatch sets whether to wait for user confirmation between batches
+func (mp *ManifestProcessor) WithWaitBatch(waitBatch bool) *ManifestProcessor {
+	mp.waitBatch = waitBatch
 	return mp
 }
 
@@ -133,6 +142,13 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 					return false, err
 				}
 
+				// If this is not the first batch and waitBatch is enabled, prompt user
+				if i > 0 && mp.waitBatch {
+					fmt.Printf("Press Enter to copy batch %d/%d...", i+1, len(batches))
+					reader := bufio.NewReader(os.Stdin)
+					_, _ = reader.ReadString('\n') // Wait for Enter key
+				}
+
 				if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
 					mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
 				} else {
@@ -143,7 +159,7 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 
 				// Add a small delay between clipboard operations to ensure they're captured separately
 				// by the clipboard manager (only if there are multiple batches)
-				if i < len(batches)-1 {
+				if i < len(batches)-1 && !mp.waitBatch {
 					time.Sleep(100 * time.Millisecond)
 				}
 			}
