@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/go-logr/logr"
@@ -26,6 +27,7 @@ type ManifestProcessor struct {
 	logger       logr.Logger
 	debug        bool
 	manifestFile string
+	batchSize    int64
 	reader       ManifestReader
 	archiver     ArchiveProcessor
 	clipboard    ClipboardWriter
@@ -36,10 +38,17 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 		logger:       logger,
 		debug:        debug,
 		manifestFile: manifestFile,
+		batchSize:    0,
 		clipboard:    &SystemClipboard{},
 	}
 	mp.reader = NewManifestGenerator(logger)
 	mp.archiver = mp
+	return mp
+}
+
+// WithBatchSize sets the maximum size for each batch of files in bytes
+func (mp *ManifestProcessor) WithBatchSize(batchSize int64) *ManifestProcessor {
+	mp.batchSize = batchSize
 	return mp
 }
 
@@ -91,18 +100,54 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 		mp.logger.Info("Debug mode: Temporary directory kept for inspection", "path", projectInfo.TempDir)
 	}
 
-	// If there are uncommented entries, copy txtar content to clipboard
-	txtarContent, err := os.ReadFile(projectInfo.TxtarFile)
-	if err != nil {
-		return false, err
-	}
-
 	// Skip clipboard in test environment
 	if mp.clipboard != nil {
-		if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
-			mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
+		if mp.batchSize <= 0 {
+			// No batching, copy everything at once
+			// Read txtar content
+			txtarContent, err := os.ReadFile(projectInfo.TxtarFile)
+			if err != nil {
+				return false, err
+			}
+
+			if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
+				mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
+			} else {
+				mp.logger.V(1).Info("Txtar content copied to clipboard")
+			}
 		} else {
-			mp.logger.V(1).Info("Txtar content copied to clipboard")
+			// Create batches and copy each batch separately
+			batches, err := mp.createBatches(projectInfo)
+			if err != nil {
+				return false, err
+			}
+
+			// Copy all batches to clipboard in sequence, from first to last
+			for i, batchFile := range batches {
+				batchContent, err := os.ReadFile(batchFile)
+				if err != nil {
+					return false, err
+				}
+
+				if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
+					mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
+				} else {
+					mp.logger.V(1).Info("Batch txtar content copied to clipboard",
+						"batch", i+1,
+						"total_batches", len(batches))
+				}
+
+				// Add a small delay between clipboard operations to ensure they're captured separately
+				// by the clipboard manager (only if there are multiple batches)
+				if i < len(batches)-1 {
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+
+			// Log information about all batches
+			mp.logger.V(1).Info("Created and copied batch files",
+				"count", len(batches),
+				"dir", projectInfo.BatchDir)
 		}
 	}
 

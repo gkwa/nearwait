@@ -1,5 +1,7 @@
 package main
 
+import "github.com/gkwa/nearwait/cmd"
+
 func main() {
-	println("Hello, world!")
+	cmd.Execute()
 }

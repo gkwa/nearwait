@@ -14,6 +14,7 @@ type ProjectInfo struct {
 	TarFile    string
 	ExtractDir string
 	TxtarFile  string
+	BatchDir   string
 }
 
 func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
@@ -34,6 +35,13 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 	manifestBasename = strings.TrimSuffix(manifestBasename, filepath.Ext(manifestBasename))
 	txtarFilename := fmt.Sprintf("%s.txtar", manifestBasename)
 
+	batchDir := filepath.Join(tempDir, "batches")
+	if mp.batchSize > 0 {
+		if err := os.MkdirAll(batchDir, 0o755); err != nil {
+			return ProjectInfo{}, fmt.Errorf("error creating batch directory: %w", err)
+		}
+	}
+
 	info := ProjectInfo{
 		Name:       projectName,
 		CWD:        cwd,
@@ -41,6 +49,7 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 		TarFile:    filepath.Join(tempDir, fmt.Sprintf("%s.tar", projectName)),
 		ExtractDir: filepath.Join(tempDir, projectName),
 		TxtarFile:  filepath.Join(filepath.Dir(mp.manifestFile), txtarFilename),
+		BatchDir:   batchDir,
 	}
 
 	return info, nil

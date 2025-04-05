@@ -1,4 +1,4 @@
-module example.com/test
+module github.com/gkwa/nearwait
 
 go 1.23.0
 
