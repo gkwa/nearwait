@@ -120,6 +120,8 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 				return false, err
 			}
 
+			// Add delay before writing to clipboard
+			time.Sleep(1 * time.Second)
 			if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
 				mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
 			} else {
@@ -152,18 +154,14 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 					}
 				}
 
+				// Add delay before writing to clipboard
+				time.Sleep(1 * time.Second)
 				if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
 					mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
 				} else {
 					mp.logger.V(1).Info("Batch txtar content copied to clipboard",
 						"batch", i+1,
 						"total_batches", len(batches))
-				}
-
-				// Add a small delay between clipboard operations to ensure they're captured separately
-				// by the clipboard manager (only if there are multiple batches)
-				if i < len(batches)-1 && !mp.waitBatch {
-					time.Sleep(100 * time.Millisecond)
 				}
 			}
 
