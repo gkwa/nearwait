@@ -26,6 +26,10 @@ func (m *TestClipboard) WriteAll(text string) error {
 	return nil
 }
 
+func (m *TestClipboard) ShouldDelay() bool {
+	return false // Tests should not delay
+}
+
 // TestBatchWait tests the waitBatch functionality
 func TestBatchWait(t *testing.T) {
 	// Create a test logger

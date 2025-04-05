@@ -58,6 +58,11 @@ func (m *MockClipboard) WriteAll(text string) error {
 	return nil
 }
 
+// Add this new method to implement the updated ClipboardWriter interface
+func (m *MockClipboard) ShouldDelay() bool {
+	return false // Tests should not have delays
+}
+
 // MockFileSystemWalker implements FileSystemWalker for testing
 type MockFileSystemWalker struct {
 	Files map[string]bool

@@ -17,6 +17,7 @@ type ArchiveProcessor interface {
 
 type ClipboardWriter interface {
 	WriteAll(text string) error
+	ShouldDelay() bool // New method to determine if delays should be applied
 }
 
 // SystemClipboard implements ClipboardWriter using the real system clipboard
@@ -26,12 +27,20 @@ func (c *SystemClipboard) WriteAll(text string) error {
 	return clipboard.WriteAll(text)
 }
 
+func (c *SystemClipboard) ShouldDelay() bool {
+	return true // Real clipboard operations should have delays
+}
+
 // NoopClipboard implements ClipboardWriter with no-op operations
 type NoopClipboard struct{}
 
 func (c *NoopClipboard) WriteAll(text string) error {
 	// Do nothing, but simulate success
 	return nil
+}
+
+func (c *NoopClipboard) ShouldDelay() bool {
+	return false // Test operations should skip delays
 }
 
 type ManifestProcessor struct {
@@ -146,7 +155,8 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 
 		// Output batch count to stdout
 		fmt.Printf("Created %d batches\n", len(batches))
-
+		// Delay between batches when not waiting for user input
+		batchDelayMillis := int64(600)
 		// Copy all batches to clipboard in sequence, from first to last
 		for i, batchFile := range batches {
 			batchContent, err := os.ReadFile(batchFile)
@@ -175,7 +185,12 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 			// Add a delay between clipboard operations if there are multiple batches
 			// (only when waitBatch is disabled, since waitBatch already adds a pause)
 			if i < len(batches)-1 && !mp.waitBatch {
-				time.Sleep(600 * time.Millisecond)
+				// Only apply delays if the clipboard implementation says we should
+				if mp.clipboard.ShouldDelay() {
+					mp.logger.V(1).Info("Delaying before next batch copy",
+						"delay_ms", batchDelayMillis)
+					time.Sleep(time.Duration(batchDelayMillis) * time.Millisecond)
+				}
 			}
 		}
 
