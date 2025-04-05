@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/gkwa/nearwait/core"
-	"github.com/gkwa/nearwait/internal/logger"
+	"example.com/test/core"
+	"example.com/test/internal/logger"
 )
 
 var (

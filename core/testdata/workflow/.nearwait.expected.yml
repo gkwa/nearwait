@@ -1,0 +1,7 @@
+filelist:
+  # - cmd/cli.go
+  - go.mod
+  - internal/util.go
+  - main.go
+# - README.md
+# - testdata/test.txt

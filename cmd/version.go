@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gkwa/nearwait/version"
+	"example.com/test/version"
 )
 
 var versionCmd = &cobra.Command{

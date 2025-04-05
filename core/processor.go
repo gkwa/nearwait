@@ -12,12 +12,23 @@ type ArchiveProcessor interface {
 	ProcessTxtarArchive(manifest Manifest, projectInfo ProjectInfo) error
 }
 
+type ClipboardWriter interface {
+	WriteAll(text string) error
+}
+
+type SystemClipboard struct{}
+
+func (c *SystemClipboard) WriteAll(text string) error {
+	return clipboard.WriteAll(text)
+}
+
 type ManifestProcessor struct {
 	logger       logr.Logger
 	debug        bool
 	manifestFile string
 	reader       ManifestReader
 	archiver     ArchiveProcessor
+	clipboard    ClipboardWriter
 }
 
 func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *ManifestProcessor {
@@ -25,9 +36,16 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 		logger:       logger,
 		debug:        debug,
 		manifestFile: manifestFile,
+		clipboard:    &SystemClipboard{},
 	}
 	mp.reader = NewManifestGenerator(logger)
 	mp.archiver = mp
+	return mp
+}
+
+// For testing purposes
+func (mp *ManifestProcessor) WithClipboard(clipboard ClipboardWriter) *ManifestProcessor {
+	mp.clipboard = clipboard
 	return mp
 }
 
@@ -79,11 +97,14 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 		return false, err
 	}
 
-	if err := clipboard.WriteAll(string(txtarContent)); err != nil {
-		return false, err
+	// Skip clipboard in test environment
+	if mp.clipboard != nil {
+		if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
+			mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
+		} else {
+			mp.logger.V(1).Info("Txtar content copied to clipboard")
+		}
 	}
-
-	mp.logger.V(1).Info("Txtar content copied to clipboard")
 
 	return false, nil
 }

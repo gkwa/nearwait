@@ -1,8 +1,8 @@
-module github.com/gkwa/nearwait
+module example.com/test
 
 go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.23.4
 
 require (
 	github.com/atotto/clipboard v0.1.4

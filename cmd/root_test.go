@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gkwa/nearwait/internal/logger"
+	"example.com/test/internal/logger"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
