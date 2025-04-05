@@ -146,7 +146,10 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 				if i > 0 && mp.waitBatch {
 					fmt.Printf("Press Enter to copy batch %d/%d...", i+1, len(batches))
 					reader := bufio.NewReader(os.Stdin)
-					_, _ = reader.ReadString('\n') // Wait for Enter key
+					_, err = reader.ReadString('\n') // Wait for Enter key
+					if err != nil {
+						mp.logger.V(1).Info("Error reading user input", "error", err.Error())
+					}
 				}
 
 				if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
