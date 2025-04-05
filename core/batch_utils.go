@@ -19,12 +19,15 @@ type FileInfo struct {
 // createBatches creates multiple txtar files based on the batch size
 func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, error) {
 	// If batching is disabled, return
-	if mp.batchSize <= 0 {
+	if mp.batchKBytes <= 0 {
 		return nil, nil
 	}
 
+	// Convert kilobytes to bytes for internal processing
+	batchBytes := mp.batchKBytes * 1024
+
 	mp.logger.V(1).Info("Creating batched txtar archives",
-		"batch_size", mp.batchSize,
+		"batch_kbytes", mp.batchKBytes,
 		"extract_dir", projectInfo.ExtractDir)
 
 	// Get all files and their sizes in the extraction directory
@@ -33,17 +36,14 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 		if err != nil {
 			return err
 		}
-
 		if !info.IsDir() {
 			relPath, err := filepath.Rel(projectInfo.ExtractDir, path)
 			if err != nil {
 				return err
 			}
-
 			// Account for txtar overhead: each file adds a header line plus a newline
 			// The txtar format adds: "-- filename --\n" + content + "\n"
 			overhead := int64(len("-- "+relPath+" --\n") + 1) // +1 for the trailing newline
-
 			files = append(files, FileInfo{
 				Path: relPath,
 				Size: info.Size() + overhead,
@@ -68,13 +68,13 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 	// Add each file to a batch
 	for _, file := range files {
 		// If file is larger than batch size, create its own batch
-		if file.Size > mp.batchSize {
+		if file.Size > batchBytes {
 			batches = append(batches, []FileInfo{file})
 			continue
 		}
 
 		// If adding this file would exceed batch size, start a new batch
-		if currentSize+file.Size > mp.batchSize && len(currentBatch) > 0 {
+		if currentSize+file.Size > batchBytes && len(currentBatch) > 0 {
 			batches = append(batches, currentBatch)
 			currentBatch = []FileInfo{file}
 			currentSize = file.Size
@@ -103,7 +103,6 @@ func (mp *ManifestProcessor) createBatches(projectInfo ProjectInfo) ([]string, e
 			if err != nil {
 				return nil, err
 			}
-
 			ar.Files = append(ar.Files, txtar.File{
 				Name: file.Path,
 				Data: content,

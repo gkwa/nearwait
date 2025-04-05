@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -27,7 +28,7 @@ type ManifestProcessor struct {
 	logger       logr.Logger
 	debug        bool
 	manifestFile string
-	batchSize    int64
+	batchKBytes  int64
 	reader       ManifestReader
 	archiver     ArchiveProcessor
 	clipboard    ClipboardWriter
@@ -38,7 +39,7 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 		logger:       logger,
 		debug:        debug,
 		manifestFile: manifestFile,
-		batchSize:    0,
+		batchKBytes:  0,
 		clipboard:    &SystemClipboard{},
 	}
 	mp.reader = NewManifestGenerator(logger)
@@ -46,9 +47,9 @@ func NewManifestProcessor(logger logr.Logger, debug bool, manifestFile string) *
 	return mp
 }
 
-// WithBatchSize sets the maximum size for each batch of files in bytes
-func (mp *ManifestProcessor) WithBatchSize(batchSize int64) *ManifestProcessor {
-	mp.batchSize = batchSize
+// WithBatchKBytes sets the maximum size for each batch of files in kilobytes
+func (mp *ManifestProcessor) WithBatchKBytes(batchKBytes int64) *ManifestProcessor {
+	mp.batchKBytes = batchKBytes
 	return mp
 }
 
@@ -102,7 +103,7 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 
 	// Skip clipboard in test environment
 	if mp.clipboard != nil {
-		if mp.batchSize <= 0 {
+		if mp.batchKBytes <= 0 {
 			// No batching, copy everything at once
 			// Read txtar content
 			txtarContent, err := os.ReadFile(projectInfo.TxtarFile)
@@ -121,6 +122,9 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 			if err != nil {
 				return false, err
 			}
+
+			// Output batch count to stdout
+			fmt.Printf("Created %d batches\n", len(batches))
 
 			// Copy all batches to clipboard in sequence, from first to last
 			for i, batchFile := range batches {

@@ -36,7 +36,7 @@ func (mp *ManifestProcessor) setupProjectInfo() (ProjectInfo, error) {
 	txtarFilename := fmt.Sprintf("%s.txtar", manifestBasename)
 
 	batchDir := filepath.Join(tempDir, "batches")
-	if mp.batchSize > 0 {
+	if mp.batchKBytes > 0 {
 		if err := os.MkdirAll(batchDir, 0o755); err != nil {
 			return ProjectInfo{}, fmt.Errorf("error creating batch directory: %w", err)
 		}
