@@ -19,10 +19,19 @@ type ClipboardWriter interface {
 	WriteAll(text string) error
 }
 
+// SystemClipboard implements ClipboardWriter using the real system clipboard
 type SystemClipboard struct{}
 
 func (c *SystemClipboard) WriteAll(text string) error {
 	return clipboard.WriteAll(text)
+}
+
+// NoopClipboard implements ClipboardWriter with no-op operations
+type NoopClipboard struct{}
+
+func (c *NoopClipboard) WriteAll(text string) error {
+	// Do nothing, but simulate success
+	return nil
 }
 
 type ManifestProcessor struct {
@@ -62,15 +71,20 @@ func (mp *ManifestProcessor) WithWaitBatch(waitBatch bool) *ManifestProcessor {
 	return mp
 }
 
-// For testing purposes
+// WithClipboard sets a custom clipboard implementation
 func (mp *ManifestProcessor) WithClipboard(clipboard ClipboardWriter) *ManifestProcessor {
 	mp.clipboard = clipboard
 	return mp
 }
 
+// WithNoopClipboard sets a no-op clipboard for testing
+func (mp *ManifestProcessor) WithNoopClipboard() *ManifestProcessor {
+	mp.clipboard = &NoopClipboard{}
+	return mp
+}
+
 func (mp *ManifestProcessor) Process() (bool, error) {
 	mp.logger.V(1).Info("Processing manifest")
-
 	manifest, err := mp.reader.ReadManifest(mp.manifestFile)
 	if err != nil {
 		return false, err
@@ -110,68 +124,65 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 		mp.logger.Info("Debug mode: Temporary directory kept for inspection", "path", projectInfo.TempDir)
 	}
 
-	// Skip clipboard in test environment
-	if mp.clipboard != nil {
-		if mp.batchKBytes <= 0 {
-			// No batching, copy everything at once
-			// Read txtar content
-			txtarContent, err := os.ReadFile(projectInfo.TxtarFile)
+	// Process clipboard operations
+	if mp.batchKBytes <= 0 {
+		// No batching, copy everything at once
+		txtarContent, err := os.ReadFile(projectInfo.TxtarFile)
+		if err != nil {
+			return false, err
+		}
+
+		if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
+			mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
+		} else {
+			mp.logger.V(1).Info("Txtar content copied to clipboard")
+		}
+	} else {
+		// Create batches and copy each batch separately
+		batches, err := mp.createBatches(projectInfo)
+		if err != nil {
+			return false, err
+		}
+
+		// Output batch count to stdout
+		fmt.Printf("Created %d batches\n", len(batches))
+
+		// Copy all batches to clipboard in sequence, from first to last
+		for i, batchFile := range batches {
+			batchContent, err := os.ReadFile(batchFile)
 			if err != nil {
 				return false, err
 			}
 
-			if err := mp.clipboard.WriteAll(string(txtarContent)); err != nil {
+			// If this is not the first batch and waitBatch is enabled, prompt user
+			if i > 0 && mp.waitBatch {
+				fmt.Printf("Press Enter to copy batch %d/%d...", i+1, len(batches))
+				reader := bufio.NewReader(os.Stdin)
+				_, err = reader.ReadString('\n') // Wait for Enter key
+				if err != nil {
+					mp.logger.V(1).Info("Error reading user input", "error", err.Error())
+				}
+			}
+
+			if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
 				mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
 			} else {
-				mp.logger.V(1).Info("Txtar content copied to clipboard")
-			}
-		} else {
-			// Create batches and copy each batch separately
-			batches, err := mp.createBatches(projectInfo)
-			if err != nil {
-				return false, err
+				mp.logger.V(1).Info("Batch txtar content copied to clipboard",
+					"batch", i+1,
+					"total_batches", len(batches))
 			}
 
-			// Output batch count to stdout
-			fmt.Printf("Created %d batches\n", len(batches))
-
-			// Copy all batches to clipboard in sequence, from first to last
-			for i, batchFile := range batches {
-				batchContent, err := os.ReadFile(batchFile)
-				if err != nil {
-					return false, err
-				}
-
-				// If this is not the first batch and waitBatch is enabled, prompt user
-				if i > 0 && mp.waitBatch {
-					fmt.Printf("Press Enter to copy batch %d/%d...", i+1, len(batches))
-					reader := bufio.NewReader(os.Stdin)
-					_, err = reader.ReadString('\n') // Wait for Enter key
-					if err != nil {
-						mp.logger.V(1).Info("Error reading user input", "error", err.Error())
-					}
-				}
-
-				if err := mp.clipboard.WriteAll(string(batchContent)); err != nil {
-					mp.logger.V(1).Info("Skipping clipboard: " + err.Error())
-				} else {
-					mp.logger.V(1).Info("Batch txtar content copied to clipboard",
-						"batch", i+1,
-						"total_batches", len(batches))
-				}
-
-				// Add a small delay between clipboard operations to ensure they're captured separately
-				// by the clipboard manager (only if there are multiple batches)
-				if i < len(batches)-1 && !mp.waitBatch {
-					time.Sleep(600 * time.Millisecond)
-				}
+			// Add a delay between clipboard operations if there are multiple batches
+			// (only when waitBatch is disabled, since waitBatch already adds a pause)
+			if i < len(batches)-1 && !mp.waitBatch {
+				time.Sleep(600 * time.Millisecond)
 			}
-
-			// Log information about all batches
-			mp.logger.V(1).Info("Created and copied batch files",
-				"count", len(batches),
-				"dir", projectInfo.BatchDir)
 		}
+
+		// Log information about all batches
+		mp.logger.V(1).Info("Created and copied batch files",
+			"count", len(batches),
+			"dir", projectInfo.BatchDir)
 	}
 
 	return false, nil
