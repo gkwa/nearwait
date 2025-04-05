@@ -93,7 +93,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&manifestFile, "manifest", ".nearwait.yml", "Name of the manifest file")
 	rootCmd.PersistentFlags().StringSliceVar(&includes, "include", nil, "Include only specified directories")
 	rootCmd.PersistentFlags().BoolVar(&noExclude, "no-exclude", false, "Disable default directory exclusions")
-	rootCmd.PersistentFlags().Int64Var(&batchKBytes, "batch-kbytes", 0, "Maximum size of each batch in kilobytes (0 = no batching)")
+	rootCmd.PersistentFlags().Int64VarP(&batchKBytes, "batch-kbytes", "b", 0, "Maximum size of each batch in kilobytes (0 = no batching)")
 	rootCmd.PersistentFlags().BoolVar(&waitBatch, "wait-batch", false, "Wait for user confirmation before copying next batch")
 
 	if err := viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose")); err != nil {
