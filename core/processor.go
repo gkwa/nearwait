@@ -163,7 +163,7 @@ func (mp *ManifestProcessor) Process() (bool, error) {
 				// Add a small delay between clipboard operations to ensure they're captured separately
 				// by the clipboard manager (only if there are multiple batches)
 				if i < len(batches)-1 && !mp.waitBatch {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(600 * time.Millisecond)
 				}
 			}
 
