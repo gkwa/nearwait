@@ -1,7 +1,6 @@
 package core
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,8 +80,4 @@ func (mg *ManifestGenerator) GetCurrentFiles() (map[string]bool, error) {
 	}
 
 	return files, nil
-}
-
-func (mg *ManifestGenerator) getFilesFromFS(fsys fs.FS) (map[string]bool, error) {
-	return mg.GetCurrentFiles()
 }
