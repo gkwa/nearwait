@@ -14,7 +14,7 @@ require (
 	github.com/google/go-containerregistry v0.21.3
 	github.com/magefile/mage v1.17.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	go.uber.org/zap v1.27.1
