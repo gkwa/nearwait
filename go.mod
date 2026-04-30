@@ -1,6 +1,6 @@
 module github.com/gkwa/nearwait
 
-go 1.25.7
+go 1.26.0
 
 toolchain go1.26.2
 
@@ -19,7 +19,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/tools v0.44.0
-	sigs.k8s.io/controller-runtime v0.23.3
+	sigs.k8s.io/controller-runtime v0.24.0
 )
 
 require (
