@@ -2,7 +2,7 @@ module github.com/gkwa/nearwait
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/atotto/clipboard v0.1.4
